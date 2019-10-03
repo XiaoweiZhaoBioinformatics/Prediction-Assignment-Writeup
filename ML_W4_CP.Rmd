@@ -1,0 +1,94 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Wendy Zhao"
+date: "9/27/2019"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Background 
+Nowadays, increasing number of devices such as Jawbone Up, Nike FuelBand, and Fitbit are accessible for everyday use, and therefore, a large amount of data regarding personal exercise can be collected widely. However, what people mainly focus on by using these devices is to quantify how much of a particular activity they do every day, rather than quantifying how well they it. In this project, 6 young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har>. Then we collected data from accelerometers on the belt, forearm, arm, and dumbbell of these 6 participants. The goal of this project is to predict the manner in which they did the exercise with any of the other variables within the data set. In addition, I will also use my prediction model to predict 20 different test cases.
+
+### Data download 
+The training and testing data for this project are downloaded from <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv> and <https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv> respectively. 
+
+### Load the data set
+read.csv will be used to read both training and testing data set. However, I did notice that there are several cells of two data sets contains “NA”, blank, and some other meaningless content. Therefore, in order to eliminate these values before further analysis, I will let all these “meaningless” values be “NA” by using na.strings. 
+```{r,cache=TRUE}
+training.raw = read.csv("~/Desktop/Coursera/Lecture8/pml-training.csv", 
+                        na.strings = c("NA", "#DIV/0!", ""))
+testing.raw = read.csv("~/Desktop/Coursera/Lecture8/pml-testing.csv", 
+                       na.strings = c("NA", "#DIV/0!", ""))
+```
+
+### Data clean-up
+Firstly, I will remove all NA values from both training and testing data set. 
+```{r,cache=TRUE}
+na_flag <- apply(is.na(training.raw), 2, sum)
+training.no.na <- training.raw[,which(na_flag == 0)] ## training data set with no NA values
+na_flag <- apply(is.na(testing.raw), 2, sum)
+testing.no.na <- testing.raw[,which(na_flag == 0)] ## testing data set with no NA values
+```
+
+Both data sets contain several columns that are not related to the outcome “classe”, including “X”, “user_name”, “raw_timestamp_part_1”, “raw_timestamp_part_2”, “cvtd_timestamp”, “new_window”, and “num_window”. Therefore, I will remove these columns from both data sets so that they won’t interfere the prediction analysis. 
+```{r,cache=TRUE}
+training.all <- training.no.na[,-c(1,2,3,4,5,6,7)]
+testing <- testing.no.na[,-c(1,2,3,4,5,6,7)]
+```
+
+### Load all necessary packages
+```{r,cache=TRUE}
+library(ggplot2)
+library(caret)
+library(randomForest)
+```
+
+### Split samples
+To assess performance of prediction, I will do cross validation before apply it to test set. I will divide training data into 70% training and 30% validation two sets.
+```{r, cache=TRUE}
+in_train <- createDataPartition(y = training.all$classe, p = 0.7, list = FALSE)
+training <- training.all[in_train, ]
+validation <- training.all[-in_train, ]
+```
+
+### Model prediction
+#### Train the data set
+```{r, cache=TRUE}
+fitControl <- trainControl(method = "cv", number = 5, allowParallel = TRUE)
+fit <- randomForest(classe ~ ., data = training, trControl = fitControl)
+fit
+```
+
+#### Estimate performance
+The predicted model will be estimated in validation data set to test the accuracy.
+```{r, cache=TRUE}
+pred.vali <- predict(fit, validation)
+confusionMatrix(pred.vali, validation$classe)
+```
+Based on the results shown above, the accuracy is 0.9951, which is relatively high.
+
+#### Predict on testing set
+Finally, the predicted model is applied to the test set to predict 20 different cases. 
+```{r, cache=TRUE}
+predict.final <- predict(fit, testing)
+predict.final
+```
+**The results above shows: based on the predicted model trained from training data set, 20 different cases (with different variables) can be categarized into 5 different fashions regarding how well they exercise with dumbbell. **
+
+### Appendix
+Testing prediction results can be created into .txt files for further use.
+```{r, cache=TRUE}
+pml_write_files = function(x){
+n = length(x)
+for(i in 1:n){
+filename = paste0("problem_id_",i,".txt")
+write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+}
+}
+pml_write_files(predict.final)
+```
